@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Population Measurement Dashboard</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"
+    />
+    <style>
+      #map {
+        height: 100vh;
+        width: 80%;
+        float: right;
+      }
+      body,
+      html {
+        margin: 0;
+        padding: 0;
+      }
+      .navbar {
+        width: 20%;
+        height: 100vh;
+        background: #ffffff;
+        color: #080808;
+        float: left;
+        overflow-y: auto;
+        font-family: "Arial", sans-serif;
+        padding: 20px;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        position: relative;
+      }
+      .navbar h2 {
+        margin-top: 0;
+        font-size: 24px;
+        font-weight: bold;
+      }
+      .navbar h3 {
+        position: absolute;
+        bottom: 140px;
+        left: 20px;
+        font-size: 18px;
+      }
+      .navbar p {
+        background-color: rgba(255, 255, 255, 0.1);
+        padding: 15px;
+        border-radius: 10px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        font-size: 18px;
+        margin-top: 10px;
+        line-height: 1.5;
+      }
+      #campDetails {
+        background-color: transparent;
+        padding: 0;
+        border-radius: 0;
+        box-shadow: none;
+      }
+      select {
+        width: 100%;
+        box-shadow: 0px 0px 5px rgba(0, 0, 0, 0.2);
+        border: none;
+        padding: 5px;
+        font-size: 16px;
+        border-radius: 4px;
+      }
+      .controls {
+        display: flex;
+        justify-content: space-between;
+      }
+      .control-column {
+        flex: 1;
+        padding: 10px;
+      }
+      #drawControl {
+        position: absolute;
+        bottom: 10px;
+        left: 10px;
+        display: flex;
+        gap: 10px;
+      }
+      #drawControl .leaflet-draw-section {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+      #layerControl {
+        position: absolute;
+        bottom: 10px;
+        right: 10px;
+        display: flex;
+        gap: 10px;
+      }
+      hr {
+        width: calc(100% + 40px);
+        margin: 0 -20px;
+        border: 0;
+        border-top: 1px solid #000;
+      }
+
+      #loginOverlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7)
+          url("https://github.com/joti-acmeai/images/blob/main/World%20map.png?raw=true")
+          no-repeat center center;
+        background-size: cover;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+      }
+      #loginForm {
+        background: #fff;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
+        text-align: center;
+      }
+      #loginForm h2 {
+        margin: 0 0 20px;
+        font-size: 24px;
+      }
+      #loginForm input[type="text"],
+      #loginForm input[type="password"] {
+        width: 95%;
+        padding: 10px;
+        margin: 10px 0;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 16px;
+      }
+      #loginForm input[type="submit"] {
+        width: 100%;
+        padding: 10px;
+        background: #007bff;
+        border: none;
+        color: #fff;
+        font-size: 16px;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      #loginForm input[type="submit"]:hover {
+        background: #0056b3;
+      }
+      .hidden .leaflet-control-zoom {
+        display: none;
+      }
+      #detectButton {
+        width: 150px; /* Set the button width */
+        margin: 0 auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loginOverlay">
+      <div id="loginForm">
+        <p style="font-family: verdana">
+          Contact at <b>info@acmeai.tech</b> for username and password
+        </p>
+        <input type="text" id="username" placeholder="Username" />
+        <input type="password" id="password" placeholder="Password" />
+        <input type="submit" value="Login" onclick="login()" />
+      </div>
+    </div>
+
+    <div class="navbar" id="navbar">
+      <div>
+        <h2>Selected Location</h2>
+        <p id="locationName">No location selected</p>
+        <select id="campDropdown" onchange="onCampSelect()">
+          <option value="">Select a camp</option>
+        </select>
+        <p id="campDetails"></p>
+      </div>
+      <div>
+        <div style="display: flex; justify-items: center">
+          <h3 style="margin: 10px 0px">Tools</h3>
+          <div
+            style="
+              width: 100%;
+              height: 1px;
+              background-color: #000;
+              position: absolute;
+              bottom: 145px;
+              left: 0px;
+            "
+          ></div>
+          <div id="drawControl" class="control-column"></div>
+          <div id="layerControl" class="control-column"></div>
+          <button id="detectButton" onclick="downloadSelectedAreaImage()">
+            Detect Houses
+          </button>
+        </div>
+      </div>
+    </div>
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    <script src="https://unpkg.com/leaflet-image/leaflet-image.js"></script>
+    <script>
+      var map = L.map("map").setView([23.8103, 90.4125], 15);
+
+      var streetLayer = L.tileLayer(
+        "https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}",
+        {
+          maxZoom: 22,
+          attribution:
+            'Map data © <a href="https://www.mapbox.com/">Mapbox</a>',
+          id: "mapbox/streets-v11",
+          tileSize: 512,
+          zoomOffset: -1,
+          accessToken:
+            "pk.eyJ1Ijoiam90aSIsImEiOiJjbHltcHQ0aGsxMnp4MmpyNXBmYndkcWhjIn0.xSyKjextl0Xbu1sGxy-7Hw", // Replace with your Mapbox access token
+        }
+      ).addTo(map);
+
+      var googleSatLayer = L.tileLayer(
+        "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+        {
+          maxZoom: 22,
+          attribution:
+            'Map data © <a href="https://www.google.com/maps">Google Maps</a>',
+        }
+      );
+
+      var openAerialMapLayer = L.tileLayer(
+        "https://tiles.openaerialmap.org/65560d313aa0a700013166b6/0/65560d313aa0a700013166c5/{z}/{x}/{y}.png",
+        {
+          maxZoom: 22,
+          attribution:
+            'Map data © <a href="https://map.openaerialmap.org/">OpenAerialMap</a>',
+        }
+      );
+
+      var baseMaps = {
+        "Street View": streetLayer,
+        "Satellite View": googleSatLayer,
+        OpenAerialMap: openAerialMapLayer,
+      };
+
+      var layerControl = L.control.layers(baseMaps);
+      layerControl.addTo(map);
+
+      var drawnItems = new L.FeatureGroup();
+      map.addLayer(drawnItems);
+      var drawControl = new L.Control.Draw({
+        draw: {
+          rectangle: {
+            shapeOptions: {
+              color: "blue",
+            },
+          },
+          polygon: {
+            shapeOptions: {
+              color: "red",
+            },
+          },
+          circle: false,
+          marker: false,
+          polyline: false,
+          circlemarker: false,
+        },
+        edit: {
+          featureGroup: drawnItems,
+        },
+      });
+      drawControl.addTo(map);
+
+      var selectedMarker;
+      var selectedLayer;
+
+      function updateLocationName(location) {
+        document.getElementById("locationName").innerText = location;
+      }
+
+      map.on("draw:created", function (e) {
+        var layer = e.layer;
+        drawnItems.clearLayers();
+        drawnItems.addLayer(layer);
+        selectedLayer = layer;
+
+        var bounds = layer.getBounds();
+        var latLngBounds = [
+          [bounds.getNorth(), bounds.getWest()],
+          [bounds.getSouth(), bounds.getEast()],
+        ];
+
+        map.fitBounds(latLngBounds);
+      });
+
+      function downloadSelectedAreaImage() {
+        if (selectedLayer) {
+          leafletImage(map, function (err, canvas) {
+            var bounds = selectedLayer.getBounds();
+            var topLeft = map.latLngToContainerPoint(bounds.getNorthWest());
+            var bottomRight = map.latLngToContainerPoint(bounds.getSouthEast());
+            var width = bottomRight.x - topLeft.x;
+            var height = bottomRight.y - topLeft.y;
+
+            var selectedCanvas = document.createElement("canvas");
+            selectedCanvas.width = width;
+            selectedCanvas.height = height;
+            var context = selectedCanvas.getContext("2d");
+            context.drawImage(
+              canvas,
+              topLeft.x,
+              topLeft.y,
+              width,
+              height,
+              0,
+              0,
+              width,
+              height
+            );
+
+            selectedCanvas.toBlob(function (blob) {
+              var formData = new FormData();
+              formData.append("image", blob, "selected_area.png");
+
+              var mapBounds = selectedLayer.getBounds();
+              formData.append(
+                "mapBounds",
+                JSON.stringify([
+                  [mapBounds.getNorth(), mapBounds.getWest()],
+                  [mapBounds.getSouth(), mapBounds.getEast()],
+                ])
+              );
+
+              fetch("/detect", {
+                method: "POST",
+                body: formData,
+              })
+                .then((response) => response.json())
+                .then((data) => {
+                  if (data.error) {
+                    console.error("Server Error:", data.error);
+                    return;
+                  }
+                  displayDetectedHouses(data.predictions);
+                })
+                .catch((error) => {
+                  console.error("Error:", error);
+                });
+            });
+          });
+        } else {
+          alert("No area selected to fetch");
+        }
+      }
+
+      function displayDetectedHouses(data) {
+        // Clear previous shapes
+        drawnItems.clearLayers();
+
+        if (data.length === 0) {
+          alert("No houses are detected");
+          return;
+        }
+
+        var navbarWidth = window.innerWidth * 0.2;
+
+        // Add rectangles for each detected house
+        data.forEach((prediction) => {
+          var adjustedXmin = prediction.bbox[0] + navbarWidth;
+          var adjustedXmax = prediction.bbox[2] + navbarWidth;
+
+          var southWest = map.containerPointToLatLng([
+            adjustedXmin,
+            prediction.bbox[3],
+          ]);
+          var northEast = map.containerPointToLatLng([
+            adjustedXmax,
+            prediction.bbox[1],
+          ]);
+
+          var bounds = L.latLngBounds(southWest, northEast);
+          L.rectangle(bounds, {
+            color: "red",
+            weight: 1,
+            fillOpacity: 0.2,
+          }).addTo(drawnItems);
+        });
+      }
+
+      map.on("draw:created", function (e) {
+        var layer = e.layer;
+        drawnItems.clearLayers();
+        drawnItems.addLayer(layer);
+
+        var bounds = layer.getBounds();
+        var lat = bounds.getCenter().lat;
+        var lng = bounds.getCenter().lng;
+
+        showLocationName(lat, lng);
+      });
+
+      map.on("draw:deleted", function (e) {
+        updateLocationName("No location selected");
+      });
+
+      function showLocationName(lat, lng) {
+        fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
+        )
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.display_name) {
+              updateLocationName(data.display_name);
+            } else {
+              updateLocationName("Location name not found.");
+            }
+          })
+          .catch((error) => {
+            console.error("Error fetching location name:", error);
+            updateLocationName("Error fetching location name.");
+          });
+      }
+
+      // Move controls to the navbar
+      var layerControlContainer = layerControl.getContainer();
+      document
+        .getElementById("layerControl")
+        .appendChild(layerControlContainer);
+
+      var drawControlContainer = drawControl.getContainer();
+      document.getElementById("drawControl").appendChild(drawControlContainer);
+
+      // Define specific areas with population data
+      var specificAreas = [
+        {
+          name: "Geneva Camp, Mohammadpur",
+          coords: [
+            [23.769226, 90.364011],
+            [23.769773, 90.365714],
+            [23.76736, 90.366658],
+            [23.766646, 90.364735],
+            [23.767287, 90.364504],
+            [23.76737, 90.364705],
+          ],
+          families: 5727,
+          population: 21869,
+        },
+        {
+          name: "Town Hall Camp, Mohammadpur",
+          coords: [
+            [23.75951, 90.36697],
+            [23.75954, 90.36724],
+            [23.758757, 90.367402],
+            [23.758702, 90.367187],
+          ],
+          families: 202,
+          population: 903,
+        },
+        {
+          name: "Market Camp, Mohammadpur",
+          coords: [
+            [23.76672, 90.36087],
+            [23.76689, 90.36143],
+            [23.76638, 90.36167],
+            [23.76612, 90.36113],
+          ],
+          families: 228,
+          population: 947,
+        },
+        {
+          name: "Staff Quarter Building 31, Mohammadpur",
+          coords: [
+            [23.759564, 90.366478],
+            [23.75967, 90.36674],
+            [23.75953, 90.36693],
+            [23.759395, 90.366549],
+          ],
+          families: 66,
+          population: 263,
+        },
+        {
+          name: "Football Ground Camp, Mirpur-11",
+          coords: [
+            [23.815926, 90.371353],
+            [23.816079, 90.371357],
+            [23.816117, 90.371536],
+            [23.816012, 90.37159],
+            [23.816041, 90.371693],
+            [23.816325, 90.371634],
+            [23.816351, 90.371775],
+            [23.816223, 90.371826],
+            [23.816346, 90.372615],
+            [23.81605, 90.372692],
+          ],
+          families: 93,
+          population: 403,
+        },
+        {
+          name: "Wabda Building Camp, Mirpur-10",
+          coords: [
+            [23.810985, 90.371866],
+            [23.81062, 90.372],
+            [23.81114, 90.37361],
+            [23.811441, 90.373548],
+            [23.811279, 90.372486],
+            [23.812168, 90.372475],
+            [23.812281, 90.371772],
+            [23.811898, 90.371587],
+          ],
+          families: 389,
+          population: 1672,
+        },
+        {
+          name: "Murapara Camp, Mirpur-12",
+          coords: [
+            [23.823682, 90.374327],
+            [23.823765, 90.375019],
+            [23.823534, 90.375158],
+            [23.823431, 90.374669],
+            [23.823159, 90.374735],
+            [23.823028, 90.374032],
+            [23.823255, 90.373972],
+            [23.823287, 90.374165],
+            [23.823186, 90.374189],
+            [23.823206, 90.374409],
+          ],
+          families: 352,
+          population: 1306,
+        },
+        {
+          name: "School Camp, Mirpur-12",
+          coords: [
+            [23.8211, 90.37124],
+            [23.821306, 90.37273],
+            [23.819615, 90.373219],
+            [23.81912, 90.37174],
+          ],
+          families: 312,
+          population: 1304,
+        },
+        {
+          name: "Muslim Camp, Mirpur-10",
+          coords: [
+            [23.813949, 90.367764],
+            [23.814061, 90.368179],
+            [23.814241, 90.368128],
+            [23.814687, 90.369697],
+            [23.813539, 90.369987],
+            [23.81359, 90.369486],
+            [23.813762, 90.369392],
+            [23.813257, 90.36804],
+          ],
+          families: 526,
+          population: 2688,
+        },
+        {
+          name: "Kurmitola Camp, Mirpur-12",
+          coords: [
+            [23.826402, 90.376338],
+            [23.82648, 90.37695],
+            [23.82383, 90.37732],
+            [23.823888, 90.376721],
+          ],
+          families: 1411,
+          population: 5107,
+        },
+        {
+          name: "New Kurmitola Camp, Mirpur-12",
+          coords: [
+            [23.82817, 90.37748],
+            [23.828273, 90.379401],
+            [23.827385, 90.380815],
+            [23.82699, 90.380643],
+            [23.826538, 90.378366],
+            [23.825618, 90.380233],
+            [23.823637, 90.379602],
+            [23.823242, 90.378039],
+          ],
+          families: 552,
+          population: 2014,
+        },
+        {
+          name: "Millat Camp, Mirpur-11",
+          coords: [
+            [23.819747, 90.368436],
+            [23.818652, 90.368711],
+            [23.818838, 90.369671],
+            [23.819957, 90.369419],
+          ],
+          families: 105,
+          population: 420,
+        },
+      ];
+
+      // Populate the dropdown menu with camp options
+      var campDropdown = document.getElementById("campDropdown");
+      specificAreas.forEach(function (area, index) {
+        var option = document.createElement("option");
+        option.value = index;
+        option.text = area.name;
+        campDropdown.add(option);
+      });
+
+      // Add polygons for specific areas
+      specificAreas.forEach(function (area) {
+        var polygon = L.polygon(area.coords, {
+          color: "red",
+        }).addTo(map);
+
+        polygon.on("click", function () {
+          updateLocationName(area.name);
+          showCampDetails(area);
+          if (selectedMarker) {
+            map.removeLayer(selectedMarker);
+          }
+          selectedMarker = L.marker(polygon.getBounds().getCenter())
+            .addTo(map)
+            .bindPopup(area.name)
+            .openPopup();
+        });
+      });
+
+      // Show camp details when a camp is selected from the dropdown
+      function onCampSelect() {
+        var selectedIndex = campDropdown.selectedIndex;
+        if (selectedIndex > 0) {
+          var selectedArea = specificAreas[selectedIndex - 1];
+          updateLocationName(selectedArea.name);
+          showCampDetails(selectedArea);
+          map.fitBounds(selectedArea.coords);
+          if (selectedMarker) {
+            map.removeLayer(selectedMarker);
+          }
+          selectedMarker = L.marker(
+            L.polygon(selectedArea.coords).getBounds().getCenter()
+          )
+            .addTo(map)
+            .bindPopup(selectedArea.name)
+            .openPopup();
+        } else {
+          document.getElementById("campDetails").innerText = "";
+          updateLocationName("No location selected");
+        }
+      }
+
+      // Show camp details in the campDetails paragraph
+      function showCampDetails(area) {
+        document.getElementById("campDetails").innerText =
+          "Number of families: " +
+          area.families +
+          "\n" +
+          "Total population: " +
+          area.population;
+      }
+
+      // Clear selected location info when clicking on the map outside marked areas
+      map.on("click", function (e) {
+        if (!e.originalEvent.target.closest(".leaflet-interactive")) {
+          updateLocationName("No location selected");
+          document.getElementById("campDetails").innerText = "";
+          if (selectedMarker) {
+            map.removeLayer(selectedMarker);
+            selectedMarker = null;
+          }
+        }
+      });
+
+      // Your existing JavaScript for predefined areas and location updates
+
+      function login() {
+        var username = document.getElementById("username").value;
+        var password = document.getElementById("password").value;
+
+        if (username === "admin" && password === "password") {
+          document.getElementById("loginOverlay").style.display = "none";
+          document.body.classList.remove("hidden");
+        } else {
+          alert("Invalid login credentials");
+        }
+      }
+
+      document.body.classList.add("hidden");
+    </script>
+  </body>
+</html>
